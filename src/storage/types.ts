@@ -1,4 +1,5 @@
 import type { DecodedEvent, JsonValue, TokenTransfer } from "../decoder/types.js";
+import type { TransactionRecord } from "../transactions/types.js";
 
 export type IngestionMode = "live" | "backfill" | "replay";
 
@@ -115,6 +116,13 @@ export interface Storage {
   /** Force a cursor position; used when recovering from an RPC retention gap. */
   setCursor(streamId: string, lastCursor: string | null, lastLedger: number): Promise<void>;
   commitPage(input: CommitPageInput): Promise<CommitPageResult>;
+  /** Idempotently store transaction resource metadata keyed by hash. */
+  commitTransactions(records: TransactionRecord[]): Promise<number>;
+  getTransaction(txHash: string): Promise<TransactionRecord | undefined>;
+  /** Distinct event tx hashes that have no transaction metadata yet. */
+  listTransactionHashesWithoutMetadata(
+    limit: number,
+  ): Promise<{ txHash: string; ledgerClosedAt: string }[]>;
   startRun(input: IngestionRunInput): Promise<string>;
   finishRun(runId: string, update: IngestionRunUpdate): Promise<void>;
   recordGap(gap: GapInput): Promise<GapRow>;

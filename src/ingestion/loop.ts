@@ -6,6 +6,7 @@ import type { Logger } from "../logger.js";
 import type { Metrics } from "../metrics.js";
 import type { CommitPageResult, CursorState, Storage } from "../storage/types.js";
 import { decodeBatch } from "./decode-batch.js";
+import { TransactionEnricher, type TransactionFetcher } from "./enrich.js";
 
 export interface IngestionLoopOptions {
   config: AppConfig;
@@ -15,6 +16,8 @@ export interface IngestionLoopOptions {
   logger: Logger;
   metrics: Metrics;
   streamId: string;
+  /** When provided, store transaction resource metadata after each page. */
+  transactionFetcher?: TransactionFetcher;
 }
 
 export type LoopStatus = "starting" | "running" | "degraded" | "stopped" | "failed";
@@ -53,6 +56,7 @@ export class IngestionLoop {
   readonly #logger: Logger;
   readonly #metrics: Metrics;
   readonly #streamId: string;
+  readonly #enricher?: TransactionEnricher;
   #retention: RetentionInfo | null = null;
   #hasGap = false;
   #lastGapKey: string | null = null;
@@ -68,6 +72,14 @@ export class IngestionLoop {
     this.#logger = options.logger;
     this.#metrics = options.metrics;
     this.#streamId = options.streamId;
+    this.#enricher = options.transactionFetcher
+      ? new TransactionEnricher({
+          fetcher: options.transactionFetcher,
+          storage: options.storage,
+          logger: options.logger,
+          metrics: options.metrics,
+        })
+      : undefined;
     this.#state = {
       streamId: options.streamId,
       source: options.source.label,
@@ -265,6 +277,10 @@ export class IngestionLoop {
       });
       const elapsedSeconds = Number(process.hrtime.bigint() - started) / 1e9;
       this.#metrics.pageDuration.observe({ stream: this.#streamId }, elapsedSeconds);
+
+      if (this.#enricher && batch.events.length > 0) {
+        await this.#enricher.enrich(batch.events);
+      }
 
       committed.insertedEvents += pageResult.insertedEvents;
       committed.duplicateEvents += pageResult.duplicateEvents;

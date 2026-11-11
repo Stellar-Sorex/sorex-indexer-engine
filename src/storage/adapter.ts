@@ -6,9 +6,10 @@ import { Kysely, PostgresDialect, SqliteDialect, sql } from "kysely";
 import { Migrator, type Migration, type MigrationProvider } from "kysely/migration";
 import { Pool } from "pg";
 import type { DecodedEvent, JsonValue, TokenTransfer } from "../decoder/types.js";
+import type { TransactionRecord } from "../transactions/types.js";
 import { StorageError } from "../errors.js";
 import type { LogLevel } from "../config.js";
-import { migrationStatements, type Dialect } from "./migrations.js";
+import { migrationStatements, transactionMigrationStatements, type Dialect } from "./migrations.js";
 import type {
   CommitPageInput,
   CommitPageResult,
@@ -75,6 +76,25 @@ interface ContractsTable {
   updated_at: string;
 }
 
+interface TransactionsTable {
+  tx_hash: string;
+  ledger: number;
+  ledger_closed_at: string;
+  application_order: number;
+  successful: boolean | number;
+  fee_bump: boolean | number;
+  fee_charged: string;
+  resource_fee: string | null;
+  cpu_instructions: number | null;
+  memory_bytes: number | null;
+  read_bytes: number | null;
+  write_bytes: number | null;
+  envelope_size_bytes: number;
+  operation_count: number;
+  has_soroban_data: boolean | number;
+  updated_at: string;
+}
+
 interface IngestionRunsTable {
   run_id: string;
   stream_id: string;
@@ -104,6 +124,7 @@ interface Database {
   cursors: CursorsTable;
   token_transfers: TokenTransfersTable;
   contracts: ContractsTable;
+  transactions: TransactionsTable;
   ingestion_runs: IngestionRunsTable;
   ingestion_gaps: IngestionGapsTable;
 }
@@ -134,6 +155,18 @@ class StaticMigrationProvider implements MigrationProvider {
           for (const table of tables) {
             await sql.raw(`DROP TABLE IF EXISTS ${table}`).execute(database);
           }
+        },
+      },
+      "002_transactions": {
+        async up(db): Promise<void> {
+          const database = db as unknown as Kysely<Database>;
+          for (const statement of transactionMigrationStatements(dialect)) {
+            await sql.raw(statement).execute(database);
+          }
+        },
+        async down(db): Promise<void> {
+          const database = db as unknown as Kysely<Database>;
+          await sql.raw("DROP TABLE IF EXISTS transactions").execute(database);
         },
       },
     };
@@ -419,6 +452,89 @@ export class KyselyStorage implements Storage {
         { cause: error },
       );
     }
+  }
+
+  async commitTransactions(records: TransactionRecord[]): Promise<number> {
+    if (records.length === 0) return 0;
+    const dialect = this.#dialect;
+    const timestamp = nowIso();
+    try {
+      const inserted = await this.#db
+        .insertInto("transactions")
+        .values(
+          records.map((record) => ({
+            tx_hash: record.txHash,
+            ledger: record.ledger,
+            ledger_closed_at: record.ledgerClosedAt,
+            application_order: record.applicationOrder,
+            successful: dialect === "postgres" ? record.successful : record.successful ? 1 : 0,
+            fee_bump: dialect === "postgres" ? record.feeBump : record.feeBump ? 1 : 0,
+            fee_charged: record.feeCharged,
+            resource_fee: record.resourceFee,
+            cpu_instructions: record.cpuInstructions,
+            memory_bytes: record.memoryBytes,
+            read_bytes: record.readBytes,
+            write_bytes: record.writeBytes,
+            envelope_size_bytes: record.envelopeSizeBytes,
+            operation_count: record.operationCount,
+            has_soroban_data:
+              dialect === "postgres" ? record.hasSorobanData : record.hasSorobanData ? 1 : 0,
+            updated_at: timestamp,
+          })),
+        )
+        .onConflict((conflict) => conflict.column("tx_hash").doNothing())
+        .returning("tx_hash")
+        .execute();
+      return inserted.length;
+    } catch (error) {
+      throw new StorageError(
+        `Failed to commit ${records.length} transaction metadata rows: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+  }
+
+  async getTransaction(txHash: string): Promise<TransactionRecord | undefined> {
+    const row = await this.#db
+      .selectFrom("transactions")
+      .selectAll()
+      .where("tx_hash", "=", txHash)
+      .executeTakeFirst();
+    if (!row) return undefined;
+    return {
+      txHash: row.tx_hash,
+      ledger: toNumber(row.ledger),
+      ledgerClosedAt: isoString(row.ledger_closed_at),
+      applicationOrder: toNumber(row.application_order),
+      successful: truthy(row.successful),
+      feeBump: truthy(row.fee_bump),
+      feeCharged: row.fee_charged,
+      resourceFee: row.resource_fee,
+      cpuInstructions: row.cpu_instructions === null ? null : toNumber(row.cpu_instructions),
+      memoryBytes: row.memory_bytes === null ? null : toNumber(row.memory_bytes),
+      readBytes: row.read_bytes === null ? null : toNumber(row.read_bytes),
+      writeBytes: row.write_bytes === null ? null : toNumber(row.write_bytes),
+      envelopeSizeBytes: toNumber(row.envelope_size_bytes),
+      operationCount: toNumber(row.operation_count),
+      hasSorobanData: truthy(row.has_soroban_data),
+    };
+  }
+
+  async listTransactionHashesWithoutMetadata(
+    limit: number,
+  ): Promise<{ txHash: string; ledgerClosedAt: string }[]> {
+    const rows = await this.#db
+      .selectFrom("events")
+      .leftJoin("transactions", "transactions.tx_hash", "events.tx_hash")
+      .select(["events.tx_hash as tx_hash", "events.ledger_closed_at as ledger_closed_at"])
+      .where("transactions.tx_hash", "is", null)
+      .distinct()
+      .limit(limit)
+      .execute();
+    return rows.map((row) => ({
+      txHash: row.tx_hash,
+      ledgerClosedAt: isoString(row.ledger_closed_at),
+    }));
   }
 
   async startRun(input: IngestionRunInput): Promise<string> {

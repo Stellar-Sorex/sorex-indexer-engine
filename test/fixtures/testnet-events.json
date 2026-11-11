@@ -135,10 +135,7 @@
       "operationIndex": 0,
       "transactionIndex": 13,
       "txHash": "14c751cd85e3db89394bea9a92d2e6d0631946aa3ba321c2f9ce0b258db9c117",
-      "topic": [
-        "AAAADwAAAARidXJu",
-        "AAAAEgAAAAAAAAAAzAAn29cElqLZo0FjRB+vy/LmvE6r5CR0gGGJ8sz2J5c="
-      ],
+      "topic": ["AAAADwAAAARidXJu", "AAAAEgAAAAAAAAAAzAAn29cElqLZo0FjRB+vy/LmvE6r5CR0gGGJ8sz2J5c="],
       "value": "AAAACgAAAAAAAAAAAAAAAACYloA="
     },
     {
@@ -150,10 +147,7 @@
       "operationIndex": 0,
       "transactionIndex": 10,
       "txHash": "8e3ffb568bf7c5ea85ff1bba18fd426dc8308fd115986148f81a3d49f5c8740c",
-      "topic": [
-        "AAAADwAAAARtaW50",
-        "AAAAEgAAAAF6bk4D8Le2++AUTK+ZWskM/Ob/ZYt7FANA1hI/qcVTOA=="
-      ],
+      "topic": ["AAAADwAAAARtaW50", "AAAAEgAAAAF6bk4D8Le2++AUTK+ZWskM/Ob/ZYt7FANA1hI/qcVTOA=="],
       "value": "AAAAEQAAAAEAAAABAAAADwAAAAZhbW91bnQAAAAAAAoAAAAAAAAAAAAAAAAC+vCA"
     },
     {
@@ -262,10 +256,7 @@
       "operationIndex": 0,
       "transactionIndex": 5,
       "txHash": "ac1c0d3260c8f606034b09409ff0680266e478d71988ee47ee88996df30b268a",
-      "topic": [
-        "AAAADwAAAARidXJu",
-        "AAAAEgAAAAErkKZSI2bMpttWnx94swvTPIXxM7bxldVOGHRMp5vUUQ=="
-      ],
+      "topic": ["AAAADwAAAARidXJu", "AAAAEgAAAAErkKZSI2bMpttWnx94swvTPIXxM7bxldVOGHRMp5vUUQ=="],
       "value": "AAAACgAAAAAAAAAAAAAAAAAACtY="
     },
     {

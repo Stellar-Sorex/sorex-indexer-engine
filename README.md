@@ -98,29 +98,29 @@ flowchart LR
 
 All variables are validated with zod at boot.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `RPC_URL` | *(required)* | Soroban RPC endpoint, e.g. `https://soroban-testnet.stellar.org` |
-| `NETWORK` | `testnet` | Label: `testnet`, `mainnet`, `futurenet`, `custom` |
-| `NETWORK_PASSPHRASE` | testnet passphrase | Network passphrase (set for mainnet) |
-| `DATABASE_URL` | `sqlite:./data/sorex.db` | `postgres://…` or `sqlite:./path.db` / `sqlite::memory:` |
-| `STORAGE_DRIVER` | inferred | `postgres` or `sqlite` |
-| `START_LEDGER` | current head | First ledger on a fresh cursor. Must be inside RPC retention |
-| `END_LEDGER` | none | Optional stop ledger (exclusive-ish; live mode filters it) |
-| `CONTRACT_ID_FILTERS` | all contracts | Comma-separated `C…` contract IDs |
-| `TOPIC_FILTERS_JSON` | all topics | JSON `string[][]`, e.g. `[["transfer","*","**"]]` |
-| `POLL_INTERVAL_MS` | `5000` | Idle poll interval |
-| `BATCH_SIZE` | `200` | `getEvents` page size (1–10000) |
-| `GAP_CHECK_INTERVAL_MS` | `60000` | Retention/gap check cadence |
-| `MAX_RETRIES` | `5` | RPC retry attempts |
-| `RETRY_BASE_DELAY_MS` | `500` | Exponential backoff base (full jitter) |
-| `REQUEST_TIMEOUT_MS` | `15000` | Per-attempt RPC timeout |
-| `HEALTH_PORT` / `HEALTH_HOST` | `9464` / `0.0.0.0` | `/health`, `/metrics` |
-| `METRICS_ENABLED` | `true` | Enable Prometheus output |
-| `LOG_LEVEL` | `info` | pino level |
-| `LOG_PRETTY` | `false` | Human-readable logs in development |
-| `STREAM_ID` | `live` | Cursor stream id (suffixed per filter plan) |
-| `SHUTDOWN_TIMEOUT_MS` | `15000` | Graceful shutdown budget |
+| Variable                      | Default                  | Description                                                      |
+| ----------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `RPC_URL`                     | _(required)_             | Soroban RPC endpoint, e.g. `https://soroban-testnet.stellar.org` |
+| `NETWORK`                     | `testnet`                | Label: `testnet`, `mainnet`, `futurenet`, `custom`               |
+| `NETWORK_PASSPHRASE`          | testnet passphrase       | Network passphrase (set for mainnet)                             |
+| `DATABASE_URL`                | `sqlite:./data/sorex.db` | `postgres://…` or `sqlite:./path.db` / `sqlite::memory:`         |
+| `STORAGE_DRIVER`              | inferred                 | `postgres` or `sqlite`                                           |
+| `START_LEDGER`                | current head             | First ledger on a fresh cursor. Must be inside RPC retention     |
+| `END_LEDGER`                  | none                     | Optional stop ledger (exclusive-ish; live mode filters it)       |
+| `CONTRACT_ID_FILTERS`         | all contracts            | Comma-separated `C…` contract IDs                                |
+| `TOPIC_FILTERS_JSON`          | all topics               | JSON `string[][]`, e.g. `[["transfer","*","**"]]`                |
+| `POLL_INTERVAL_MS`            | `5000`                   | Idle poll interval                                               |
+| `BATCH_SIZE`                  | `200`                    | `getEvents` page size (1–10000)                                  |
+| `GAP_CHECK_INTERVAL_MS`       | `60000`                  | Retention/gap check cadence                                      |
+| `MAX_RETRIES`                 | `5`                      | RPC retry attempts                                               |
+| `RETRY_BASE_DELAY_MS`         | `500`                    | Exponential backoff base (full jitter)                           |
+| `REQUEST_TIMEOUT_MS`          | `15000`                  | Per-attempt RPC timeout                                          |
+| `HEALTH_PORT` / `HEALTH_HOST` | `9464` / `0.0.0.0`       | `/health`, `/metrics`                                            |
+| `METRICS_ENABLED`             | `true`                   | Enable Prometheus output                                         |
+| `LOG_LEVEL`                   | `info`                   | pino level                                                       |
+| `LOG_PRETTY`                  | `false`                  | Human-readable logs in development                               |
+| `STREAM_ID`                   | `live`                   | Cursor stream id (suffixed per filter plan)                      |
+| `SHUTDOWN_TIMEOUT_MS`         | `15000`                  | Graceful shutdown budget                                         |
 
 Topic filters are encoded as symbols automatically: `"transfer"` becomes
 `AAAADwAAAAh0cmFuc2Zlcg==`. Use `xdr:<base64>` to supply a raw `ScVal`.
@@ -136,14 +136,14 @@ npm run dev
 
 ## Database schema
 
-| Table | Purpose |
-| --- | --- |
-| `events` | One row per RPC event: raw topic/value XDR, decoded JSONB, ledger/tx/op/event indices |
-| `token_transfers` | Normalized SEP-41 `transfer`, `mint`, `burn`, `approve`, `clawback` rows |
-| `contracts` | First/last seen ledger and event count per contract |
-| `cursors` | `(stream_id, last_cursor, last_ledger)` |
-| `ingestion_runs` | Run lifecycle and counts for observability |
-| `ingestion_gaps` | Unrecoverable ledger ranges with the reason |
+| Table             | Purpose                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `events`          | One row per RPC event: raw topic/value XDR, decoded JSONB, ledger/tx/op/event indices |
+| `token_transfers` | Normalized SEP-41 `transfer`, `mint`, `burn`, `approve`, `clawback` rows              |     | `transactions` | Fee charged, declared Soroban resource limits and envelope size per transaction |
+| `contracts`       | First/last seen ledger and event count per contract                                   |
+| `cursors`         | `(stream_id, last_cursor, last_ledger)`                                               |
+| `ingestion_runs`  | Run lifecycle and counts for observability                                            |
+| `ingestion_gaps`  | Unrecoverable ledger ranges with the reason                                           |
 
 PostgreSQL uses `JSONB` with GIN indexes on decoded topics/data; SQLite uses
 JSON text. Amounts are stored as text so i128 values never lose precision.
@@ -168,6 +168,13 @@ curl -s localhost:9464/metrics | grep sorex_
 ```bash
 node dist/main.js backfill --from 5660000 --to 5661000
 ```
+
+Transaction resource metadata is fetched from `getTransaction` and cached in
+`transactions` (fee charged, declared CPU/read/write limits, envelope size,
+success). Run `node dist/main.js enrich --limit 100` to fill metadata for events
+indexed while enrichment was off. **Memory bytes are not exposed by public RPC
+for historical transactions**, so that column stays null and the UI says so;
+the engine never estimates it.
 
 Ranges older than `oldestLedger` fail with an explicit `RetentionError` naming
 the archival source requirement. A `GalexieLedgerSource` stub defines the

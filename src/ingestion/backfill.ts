@@ -5,6 +5,7 @@ import type { Logger } from "../logger.js";
 import type { Metrics } from "../metrics.js";
 import type { CommitPageResult, Storage } from "../storage/types.js";
 import { decodeBatch } from "./decode-batch.js";
+import { TransactionEnricher, type TransactionFetcher } from "./enrich.js";
 
 export interface BackfillOptions {
   source: LedgerSource;
@@ -14,6 +15,7 @@ export interface BackfillOptions {
   metrics: Metrics;
   batchSize: number;
   streamId: string;
+  transactionFetcher?: TransactionFetcher;
 }
 
 export interface BackfillResult extends CommitPageResult {
@@ -30,9 +32,18 @@ export interface BackfillResult extends CommitPageResult {
  */
 export class BackfillRunner {
   readonly #options: BackfillOptions;
+  readonly #enricher?: TransactionEnricher;
 
   constructor(options: BackfillOptions) {
     this.#options = options;
+    this.#enricher = options.transactionFetcher
+      ? new TransactionEnricher({
+          fetcher: options.transactionFetcher,
+          storage: options.storage,
+          logger: options.logger,
+          metrics: options.metrics,
+        })
+      : undefined;
   }
 
   async run(fromLedger: number, toLedger: number, signal?: AbortSignal): Promise<BackfillResult> {
@@ -116,6 +127,9 @@ export class BackfillRunner {
             { stream: streamId, outcome: "duplicate" },
             result.duplicateEvents,
           );
+          if (this.#enricher && batch.events.length > 0) {
+            await this.#enricher.enrich(batch.events);
+          }
         }
 
         if (lastEvent && lastEvent.ledger >= toLedger) break;

@@ -14,6 +14,7 @@ export class Metrics {
   readonly errors: Counter<"stream" | "reason">;
   readonly gaps: Counter<"stream">;
   readonly eventsDecoded: Counter<"standard">;
+  readonly transactionsIngested: Counter<string>;
 
   constructor(collectDefaults = false) {
     this.registry = new Registry();
@@ -66,6 +67,11 @@ export class Metrics {
       name: "sorex_events_decoded_total",
       help: "Decoded events by recognised standard",
       labelNames: ["standard"] as const,
+      registers: [this.registry],
+    });
+    this.transactionsIngested = new Counter({
+      name: "sorex_transactions_ingested_total",
+      help: "Transaction resource metadata rows stored",
       registers: [this.registry],
     });
   }

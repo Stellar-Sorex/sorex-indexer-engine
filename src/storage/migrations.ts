@@ -104,3 +104,35 @@ export function migrationStatements(dialect: Dialect): string[] {
 
   return statements;
 }
+
+/**
+ * Added after the initial schema. Kept separate so databases created before
+ * transaction enrichment existed receive the table through the migrator.
+ */
+export function transactionMigrationStatements(dialect: Dialect): string[] {
+  const timestampType = dialect === "postgres" ? "TIMESTAMPTZ" : "TEXT";
+  const bigintType = dialect === "postgres" ? "BIGINT" : "INTEGER";
+  const booleanType = dialect === "postgres" ? "BOOLEAN" : "INTEGER";
+  return [
+    `CREATE TABLE IF NOT EXISTS transactions (
+      tx_hash TEXT PRIMARY KEY,
+      ledger ${bigintType} NOT NULL,
+      ledger_closed_at ${timestampType} NOT NULL,
+      application_order INTEGER NOT NULL DEFAULT 0,
+      successful ${booleanType} NOT NULL,
+      fee_bump ${booleanType} NOT NULL DEFAULT ${dialect === "postgres" ? "false" : "0"},
+      fee_charged TEXT NOT NULL,
+      resource_fee TEXT,
+      cpu_instructions ${bigintType},
+      memory_bytes ${bigintType},
+      read_bytes ${bigintType},
+      write_bytes ${bigintType},
+      envelope_size_bytes ${bigintType} NOT NULL,
+      operation_count INTEGER NOT NULL,
+      has_soroban_data ${booleanType} NOT NULL DEFAULT ${dialect === "postgres" ? "false" : "0"},
+      updated_at ${timestampType} NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_transactions_ledger ON transactions (ledger)`,
+    `CREATE INDEX IF NOT EXISTS idx_transactions_successful ON transactions (successful)`,
+  ];
+}

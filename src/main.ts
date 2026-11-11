@@ -5,6 +5,7 @@ import { loadConfig, redactedConfig, type AppConfig } from "./config.js";
 import { XdrEventDecoder } from "./decoder/index.js";
 import { ConfigError, SourceUnavailableError } from "./errors.js";
 import { BackfillRunner, IngestionLoop, type LoopHealth } from "./ingestion/index.js";
+import { TransactionEnricher } from "./ingestion/enrich.js";
 import {
   FixtureLedgerSource,
   GalexieLedgerSource,
@@ -67,6 +68,7 @@ Usage:
   sorex-indexer migrate                  Apply database migrations and exit
   sorex-indexer replay --file <path>     Replay a captured getEvents payload (offline)
   sorex-indexer backfill --from <n> --to <n> [--source rpc|galexie]
+  sorex-indexer enrich [--limit 100]     Fetch transaction resource metadata for stored events
   sorex-indexer --help
 
 Environment: see .env.example and README.md. RPC_URL is required.
@@ -123,6 +125,7 @@ async function runStart(config: AppConfig): Promise<void> {
       logger,
       metrics,
       streamId,
+      transactionFetcher: client,
     });
   });
 
@@ -209,6 +212,27 @@ async function runReplay(config: AppConfig, flags: Record<string, string>): Prom
   });
 }
 
+async function runEnrich(config: AppConfig, flags: Record<string, string>): Promise<void> {
+  const limit = flags.limit ? requireInt(flags, "limit") : 100;
+  await withStorage(config, async ({ storage, logger, metrics }) => {
+    const client = new SorobanRpcClient({
+      url: config.RPC_URL,
+      logger,
+      policy: {
+        retries: config.MAX_RETRIES,
+        baseDelayMs: config.RETRY_BASE_DELAY_MS,
+        maxDelayMs: 30_000,
+        timeoutMs: config.REQUEST_TIMEOUT_MS,
+      },
+    });
+    const pending = await storage.listTransactionHashesWithoutMetadata(limit);
+    const enricher = new TransactionEnricher({ fetcher: client, storage, logger, metrics });
+    const inserted = await enricher.enrichHashes(pending);
+    logger.info({ pending: pending.length, inserted }, "transaction enrichment complete");
+    process.stdout.write(`${JSON.stringify({ scanned: pending.length, inserted }, null, 2)}\n`);
+  });
+}
+
 async function runBackfill(config: AppConfig, flags: Record<string, string>): Promise<void> {
   const from = requireInt(flags, "from");
   const to = requireInt(flags, "to");
@@ -252,6 +276,7 @@ async function runBackfill(config: AppConfig, flags: Record<string, string>): Pr
         metrics,
         batchSize: config.BATCH_SIZE,
         streamId,
+        transactionFetcher: client,
       });
       const result = await runner.run(from, to);
       inserted += result.insertedEvents;
@@ -288,6 +313,9 @@ async function main(): Promise<void> {
       return;
     case "backfill":
       await runBackfill(config, flags);
+      return;
+    case "enrich":
+      await runEnrich(config, flags);
       return;
     case "galexie":
       throw new SourceUnavailableError(

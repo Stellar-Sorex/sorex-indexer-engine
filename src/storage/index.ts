@@ -16,3 +16,4 @@ export type {
   Storage,
   TokenTransferRow,
 } from "./types.js";
+export type { TransactionRecord } from "../transactions/types.js";

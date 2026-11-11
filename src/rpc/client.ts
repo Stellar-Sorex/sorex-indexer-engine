@@ -1,6 +1,7 @@
 import { rpc } from "@stellar/stellar-sdk";
 import { RpcError } from "../errors.js";
 import type { RawSorobanEvent } from "../decoder/types.js";
+import type { RawTransactionResponse } from "../transactions/types.js";
 import type { Logger } from "../logger.js";
 import { isRetryableError, withRetry, type RetryPolicy } from "./retry.js";
 
@@ -128,6 +129,24 @@ export class SorobanRpcClient {
         oldestLedger: response.oldestLedger,
         latestLedgerCloseTime: response.latestLedgerCloseTime,
         oldestLedgerCloseTime: response.oldestLedgerCloseTime,
+      };
+    });
+  }
+
+  /** Fetch raw transaction metadata for enrichment; null when not retained. */
+  async getTransaction(txHash: string): Promise<RawTransactionResponse | null> {
+    return this.#call("getTransaction", async () => {
+      const response = await this.#server._getTransaction(txHash);
+      if (response.status === "NOT_FOUND") return null;
+      return {
+        status: response.status,
+        ledger: response.ledger,
+        applicationOrder: response.applicationOrder,
+        feeBump: response.feeBump,
+        createdAt: response.createdAt,
+        envelopeXdr: response.envelopeXdr,
+        resultXdr: response.resultXdr,
+        resultMetaXdr: response.resultMetaXdr,
       };
     });
   }
