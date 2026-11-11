@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible defect in the indexer
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug. Please remove secrets and endpoint credentials.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Expected behavior vs actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include commands, config (redacted) and the smallest fixture if relevant.
+      placeholder: |
+        1. Set DATABASE_URL=...
+        2. Run npm run dev
+        3. See error ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage driver
+      options: [PostgreSQL, SQLite, Not sure]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      render: shell

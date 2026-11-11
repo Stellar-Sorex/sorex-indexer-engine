@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a capability for the indexer
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today? Who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: API/config shape, storage impact, operational impact.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [decoder, ingestion, storage, infra, docs, testing, rpc]
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated size
+      options: [small (<1 day), medium (1-3 days), large (>3 days)]
